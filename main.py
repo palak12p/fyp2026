@@ -27,6 +27,7 @@ from agentic_workflow import run_agentic_workflow
 from classifier import classify_query
 from csv_db import student_count
 from data_retriever import assign_mentor, get_user_context, retrieve_data
+from mcp_csv_server import call_tool, list_tools
 from rbac import resolve_identity
 from response_formatter import (
     create_excel,
@@ -96,6 +97,14 @@ class MentorAssignmentRequest(BaseModel):
 
 class ClearHistoryRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
+
+class LoginRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+class McpCallRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    arguments: dict = Field(default_factory=dict)
 
 
 # ── Groq helpers ──────────────────────────────────────────────────────────────
@@ -246,6 +255,38 @@ async def health() -> dict:
         "database": "students_500.csv",
         "students": student_count(),
     }
+
+
+@app.post("/login")
+async def login(payload: LoginRequest):
+    identity = resolve_identity(payload.user_id)
+    if identity.role == "unknown":
+        raise HTTPException(status_code=401, detail="Invalid user ID")
+    context = get_user_context(
+        user_id=payload.user_id,
+        role=identity.role,
+        assignments_path=str(MENTOR_ASSIGNMENTS_PATH),
+    )
+    return JSONResponse(json.loads(_json_dumps({
+        "message": "Login successful",
+        "role": identity.role,
+        "user_id": identity.user_id or payload.user_id,
+        "user_context": context,
+    })))
+
+
+@app.get("/mcp/tools")
+async def mcp_tools():
+    return JSONResponse({"tools": list_tools()})
+
+
+@app.post("/mcp/call")
+async def mcp_call(payload: McpCallRequest):
+    try:
+        result = call_tool(payload.name, payload.arguments)
+        return JSONResponse(json.loads(_json_dumps({"result": result})))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/user-context/{user_id}")

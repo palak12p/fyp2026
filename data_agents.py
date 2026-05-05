@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict
 
-from data_retriever import retrieve_data
+from mcp_csv_server import call_tool
 
 
 @dataclass(frozen=True)
@@ -37,12 +37,15 @@ def _run(
         agent=agent,
         action=action,
         detail=detail,
-        retrieved=retrieve_data(
-            intent=intent,
-            entity=entity,
-            role=role,
-            user_id=user_id,
-            assignments_path=assignments_path,
+        retrieved=call_tool(
+            "retrieve_data",
+            {
+                "intent": intent,
+                "entity": entity,
+                "role": role,
+                "user_id": user_id,
+                "assignments_path": assignments_path,
+            },
         ),
     )
 
